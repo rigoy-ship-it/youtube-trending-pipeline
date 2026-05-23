@@ -49,6 +49,7 @@ def fetch_category_names(youtube, region_code="US"):
 
 def fetch_trending_videos(youtube, region_code):
     videos = []
+    skipped = 0
     next_page_token = None
 
     try:
@@ -66,10 +67,14 @@ def fetch_trending_videos(youtube, region_code):
                 snippet = item.get("snippet", {})
                 stats = item.get("statistics", {})
 
-                view_count = int(stats.get("viewCount", 0) or 0)
+                # Skip live streams and scheduled premieres explicitly
+                if snippet.get("liveBroadcastContent") in ("live", "upcoming"):
+                    skipped += 1
+                    continue
 
-                # Skip live streams — YouTube API returns no stats for live content
+                view_count = int(stats.get("viewCount", 0) or 0)
                 if view_count == 0:
+                    skipped += 1
                     continue
 
                 like_count = int(stats.get("likeCount", 0) or 0)
@@ -104,6 +109,7 @@ def fetch_trending_videos(youtube, region_code):
     except HttpError as e:
         print(f"Error fetching trending videos for region {region_code}: {e}")
 
+    print(f"  Skipped {skipped} live/zero-stat videos from {region_code}")
     return videos
 
 
