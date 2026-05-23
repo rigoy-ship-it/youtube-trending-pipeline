@@ -18,6 +18,9 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Show commit
+        run: git log --oneline -1
+
       - name: Install dependencies
         run: pip install -r requirements.txt
 
