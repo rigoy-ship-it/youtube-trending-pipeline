@@ -125,10 +125,11 @@ def get_or_create_sheet(gc):
 
     worksheet = spreadsheet.sheet1
 
-    # Write header row if the sheet is empty
-    if worksheet.row_count == 0 or not worksheet.row_values(1):
-        worksheet.append_row(HEADERS)
-        print("Added header row.")
+    # Insert header row at row 1 if it doesn't already exist
+    first_row = worksheet.row_values(1)
+    if first_row != HEADERS:
+        worksheet.insert_row(HEADERS, index=1)
+        print("Inserted header row at row 1.")
 
     return worksheet
 
