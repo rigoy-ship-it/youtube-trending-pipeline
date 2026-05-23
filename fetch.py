@@ -67,13 +67,16 @@ def fetch_trending_videos(youtube, region_code):
                 stats = item.get("statistics", {})
 
                 view_count = int(stats.get("viewCount", 0) or 0)
+
+                # Skip live streams — YouTube API returns no stats for live content
+                if view_count == 0:
+                    continue
+
                 like_count = int(stats.get("likeCount", 0) or 0)
                 comment_count = int(stats.get("commentCount", 0) or 0)
 
-                engagement_rate = (
-                    round((like_count + comment_count) / view_count, 6)
-                    if view_count > 0
-                    else 0.0
+                engagement_rate = round(
+                    (like_count + comment_count) / view_count, 6
                 )
 
                 category_id = snippet.get("categoryId", "")
