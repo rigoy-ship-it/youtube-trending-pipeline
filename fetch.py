@@ -104,29 +104,33 @@ def fetch_trending_videos(youtube, region_code):
     return videos
 
 
+HEADERS = [
+    "title", "categoryId", "category", "viewCount", "likeCount",
+    "commentCount", "publishedAt", "country", "fetch_date", "engagement_rate",
+]
+
+
 def get_or_create_sheet(gc):
     try:
         spreadsheet = gc.open(SHEET_NAME)
         print(f"Opened existing sheet: {SHEET_NAME}")
     except gspread.SpreadsheetNotFound:
-        spreadsheet = gc.create(SHEET_NAME)
-        print(f"Created new sheet: {SHEET_NAME}")
-        worksheet = spreadsheet.sheet1
-        worksheet.append_row(
-            [
-                "title",
-                "categoryId",
-                "category",
-                "viewCount",
-                "likeCount",
-                "commentCount",
-                "publishedAt",
-                "country",
-                "fetch_date",
-                "engagement_rate",
-            ]
+        raise SystemExit(
+            f"\nERROR: Spreadsheet '{SHEET_NAME}' not found.\n"
+            "Please:\n"
+            "  1. Create a new Google Sheet named exactly 'youtube_trending'\n"
+            "  2. Share it with the service account email (client_email in your credentials JSON)\n"
+            "     with Editor access, then re-run.\n"
         )
-    return spreadsheet.sheet1
+
+    worksheet = spreadsheet.sheet1
+
+    # Write header row if the sheet is empty
+    if worksheet.row_count == 0 or not worksheet.row_values(1):
+        worksheet.append_row(HEADERS)
+        print("Added header row.")
+
+    return worksheet
 
 
 def append_rows(worksheet, rows):
