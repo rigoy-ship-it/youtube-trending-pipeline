@@ -1,6 +1,5 @@
 import os
 import json
-import pandas as pd
 from datetime import date
 from dotenv import load_dotenv
 from googleapiclient.discovery import build
@@ -15,6 +14,11 @@ GOOGLE_CREDENTIALS = os.environ.get("GOOGLE_CREDENTIALS")
 SHEET_NAME = "youtube_trending"
 REGIONS = ["US", "GB", "IN"]
 MAX_RESULTS = 50
+
+HEADERS = [
+    "title", "categoryId", "category", "viewCount", "likeCount",
+    "commentCount", "publishedAt", "country", "fetch_date", "engagement_rate",
+]
 
 CATEGORY_NAMES = {}
 
@@ -67,40 +71,33 @@ def fetch_trending_videos(youtube, region_code):
                 snippet = item.get("snippet", {})
                 stats = item.get("statistics", {})
 
-                # Skip live streams and scheduled premieres explicitly
+                # Skip live streams and scheduled premieres
                 if snippet.get("liveBroadcastContent") in ("live", "upcoming"):
                     skipped += 1
                     continue
 
-                view_count = int(stats.get("viewCount", 0) or 0)
+                view_count = int(stats.get("viewCount") or 0)
                 if view_count == 0:
                     skipped += 1
                     continue
 
-                like_count = int(stats.get("likeCount", 0) or 0)
-                comment_count = int(stats.get("commentCount", 0) or 0)
-
-                engagement_rate = round(
-                    (like_count + comment_count) / view_count, 6
-                )
-
+                like_count = int(stats.get("likeCount") or 0)
+                comment_count = int(stats.get("commentCount") or 0)
+                engagement_rate = round((like_count + comment_count) / view_count, 6)
                 category_id = snippet.get("categoryId", "")
-                category_name = CATEGORY_NAMES.get(category_id, "Unknown")
 
-                videos.append(
-                    {
-                        "title": snippet.get("title", ""),
-                        "categoryId": category_id,
-                        "category": category_name,
-                        "viewCount": view_count,
-                        "likeCount": like_count,
-                        "commentCount": comment_count,
-                        "publishedAt": snippet.get("publishedAt", ""),
-                        "country": region_code,
-                        "fetch_date": str(date.today()),
-                        "engagement_rate": engagement_rate,
-                    }
-                )
+                videos.append({
+                    "title":          snippet.get("title", ""),
+                    "categoryId":     category_id,
+                    "category":       CATEGORY_NAMES.get(category_id, "Unknown"),
+                    "viewCount":      view_count,
+                    "likeCount":      like_count,
+                    "commentCount":   comment_count,
+                    "publishedAt":    snippet.get("publishedAt", ""),
+                    "country":        region_code,
+                    "fetch_date":     str(date.today()),
+                    "engagement_rate": engagement_rate,
+                })
 
             next_page_token = response.get("nextPageToken")
             if not next_page_token:
@@ -111,12 +108,6 @@ def fetch_trending_videos(youtube, region_code):
 
     print(f"  Skipped {skipped} live/zero-stat videos from {region_code}")
     return videos
-
-
-HEADERS = [
-    "title", "categoryId", "category", "viewCount", "likeCount",
-    "commentCount", "publishedAt", "country", "fetch_date", "engagement_rate",
-]
 
 
 def get_or_create_sheet(gc):
@@ -134,11 +125,10 @@ def get_or_create_sheet(gc):
 
     worksheet = spreadsheet.sheet1
 
-    # Insert header row at row 1 if it doesn't already exist
-    first_row = worksheet.row_values(1)
-    if first_row != HEADERS:
-        worksheet.insert_row(HEADERS, index=1)
-        print("Inserted header row at row 1.")
+    # Write header to A1 if the sheet is empty or headers are missing
+    if worksheet.row_values(1) != HEADERS:
+        worksheet.update(range_name="A1", values=[HEADERS])
+        print("Wrote header row to A1.")
 
     return worksheet
 
@@ -148,9 +138,8 @@ def append_rows(worksheet, rows):
         print("No rows to append.")
         return
 
-    df = pd.DataFrame(rows)
-    values = df.values.tolist()
-
+    # Build rows in exact HEADERS column order — no pandas, no type coercion
+    values = [[row[col] for col in HEADERS] for row in rows]
     worksheet.append_rows(values, value_input_option="USER_ENTERED")
     print(f"Appended {len(values)} rows to sheet.")
 
@@ -177,7 +166,9 @@ def main():
         print(f"  Fetched {len(videos)} videos from {region}")
         all_videos.extend(videos)
 
-    print(f"Total videos fetched: {len(all_videos)}")
+    # Final safety filter — belt and suspenders
+    all_videos = [v for v in all_videos if v["viewCount"] > 0]
+    print(f"Total videos to write: {len(all_videos)}")
 
     print("Connecting to Google Sheets...")
     gc = get_sheets_client()
